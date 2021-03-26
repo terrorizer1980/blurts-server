@@ -181,7 +181,7 @@ function toggleDropDownMenu(dropDownMenu) {
 
 function toggleArticles() {
   const windowWidth = window.innerWidth;
-  const articleToggles = document.querySelectorAll(".st-toggle-wrapper");
+  const articleToggles = document.querySelectorAll(".st-toggle-wrapper, .relay-info.toggle-parent");
   if (windowWidth > 600) {
     articleToggles.forEach(toggle => {
       toggle.classList.add("active");
@@ -336,6 +336,73 @@ function recruitmentLogic() {
   });
 }
 
+function addWaitlistSignupButtonListeners() {
+  document.querySelectorAll(".relay-sign-up-btn").forEach(btn => {
+
+    btn.addEventListener("click", async(e) => {
+      const relayEndpoint = new URL("/join-waitlist", document.body.dataset.serverUrl);
+      const signUpCallout = document.querySelector(".relay-sign-up");
+
+      signUpCallout.classList.add("sending-email");
+      try {
+        const response = await fetch(relayEndpoint, {
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+          },
+          mode: "same-origin",
+          method: "POST",
+          body: JSON.stringify({"emailToAdd": "add-user-email"}),
+        });
+        if (response && response.status === 200) {
+          setTimeout(()=> {
+            signUpCallout.classList.add("email-sent");
+            signUpCallout.classList.remove("sending-email");
+          }, 500);
+        }
+      } catch(e) {
+        // we need error messaging
+      }
+    });
+  });
+}
+
+function addWaitlistObservers() {
+
+  const privateRelayCtas = document.querySelectorAll(".private-relay-cta");
+
+  if (privateRelayCtas.length === 0) {
+    return;
+  }
+  const availableIntersectionObserver = ("IntersectionObserver" in window);
+  const gaAvailable = typeof(ga) !== undefined;
+
+
+  if (availableIntersectionObserver && gaAvailable) {
+    const sendRelayPing = (eventAction, elemData) => {
+      if (eventAction === "View" && elemData.userIsSignedUp === "true") {
+        return;
+      }
+      ga("send", "event", "Private Relay Test", eventAction, elemData.analyticsLabel);
+    };
+    const onRelayCtasComingIntoView = (entries, observer) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          sendRelayPing("View", entry.target.dataset);
+          observer.unobserve(entry.target);
+        }
+      });
+    };
+    const observer = new IntersectionObserver(onRelayCtasComingIntoView, { rootMargin: "-50px" });
+
+    privateRelayCtas.forEach(relayCta => {
+      observer.observe(relayCta);
+      relayCta.addEventListener("click", (e) => {
+        sendRelayPing("Engage", e.target.dataset);
+      });
+    });
+  }
+}
+
 ( async() => {
   document.addEventListener("touchstart", function(){}, true);
   const win = window;
@@ -456,6 +523,9 @@ function recruitmentLogic() {
   resizeDashboardMargin();
 
   recruitmentLogic();
+
+  addWaitlistSignupButtonListeners();
+  addWaitlistObservers();
 
   const dropDownMenu = document.querySelector(".mobile-nav.show-mobile");
   dropDownMenu.addEventListener("click", () => toggleDropDownMenu(dropDownMenu));
